@@ -72,6 +72,51 @@ print(result["details"])
 print(result["validation_errors"])
 ```
 
+## MCPサーバとして使う
+
+`rsp_mcp_server.py` はstdioで通信するローカルMCPサーバです。MCPクライアント側では、次のようにこのファイルをPythonで起動する設定にしてください。
+
+```json
+{
+  "mcpServers": {
+    "rsp-secure-pf": {
+      "command": "python",
+      "args": [
+        "C:/Users/hoppe/work/AISisDev/Secure_PF/rsp_mcp_server.py"
+      ],
+      "cwd": "C:/Users/hoppe/work/AISisDev/Secure_PF"
+    }
+  }
+}
+```
+
+公開されるMCPツールは次の3つです。
+
+- `list_rsp_group_agents`: `group_agents/` 内の `rsp_group_<n>.py` を列挙し、各提出ファイルの検証結果を返します。
+- `validate_rsp_group_agents`: 対戦前の静的検査だけを実行し、全体として有効かどうかを返します。
+- `run_rsp_group_tournament_from_dir`: セキュアPFで団体戦を実行し、グループ順位、全エージェント順位、スコア表、詳細ログ、Markdown表を返します。
+
+`run_rsp_group_tournament_from_dir` の主な入力は次の通りです。
+
+```json
+{
+  "group_agents_dir": "group_agents",
+  "num_match": 10000,
+  "team_size": 3,
+  "timeout_seconds": 1.0,
+  "include_score_matrix": true,
+  "include_details": true
+}
+```
+
+MCPの出力には、クライアント上で見やすいMarkdown表と、後処理しやすいJSONの両方を含めています。順位を手早く見たい場合はMarkdownの `Group Ranking`, `Group Score Chart`, `All Agent Ranking` を確認してください。
+
+JSON出力の主な順位フィールドは次の通りです。
+
+- `group_ranking`: グループごとの合計スコア順位
+- `agent_ranking`: 参加した全エージェントのスコア順順位表。1グループ3体分すべてを対象に、`rank`, `agent`, `group`, `total` を返します。
+- `member_ranking`: 既存互換用のフィールドです。内容は `agent_ranking` と同じです。
+
 ## 堅牢化の内容
 
 `rsp_group_engine.py` は、提出コードをそのまま同一プロセスでimportしません。
@@ -106,7 +151,7 @@ python -m unittest -v test_rsp_group_engine.py
 
 ```powershell
 $env:PYTHONDONTWRITEBYTECODE='1'
-python -m py_compile rsp_group_engine.py test_rsp_group_engine.py
+python -m py_compile rsp_group_engine.py rsp_mcp_server.py test_rsp_group_engine.py
 ```
 
 ## 注意
