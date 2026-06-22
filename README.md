@@ -131,6 +131,20 @@ JSON出力の主な順位フィールドは次の通りです。
 
 完全なOSレベルのサンドボックスではありませんが、公開Notebookの実装詳細を利用した先読みや呼び出し元フレーム参照は防ぐ設計です。
 
+### 旧Notebookから塞いだ主な穴
+
+旧 `rsp_vs_group.ipynb` では、提出ファイルをPF本体と同じPythonプロセスに読み込み、そのまま呼び出していました。現行版では、次の点を重点的に塞いでいます。
+
+| 旧Notebookの処理 | 問題点 | 現行版での対策 |
+|---|---|---|
+| `importlib.import_module(base_dir+"."+groups[i])` で提出ファイルを通常import | 提出コードがPF本体と同じプロセス内で動くため、`sys.modules` や `inspect` などからPFや相手モジュールの状態に触れる余地がある | 提出コードを別プロセスのワーカーで実行し、PF本体とはJSONメッセージだけで通信する |
+| `exec(f"agent1[{j}]=group1.RSP_Agent_{j+1}(...)")` でエージェントを生成 | 文字列実行により、名前解決や例外原因が見えにくく、PF側の実装詳細に依存しやすい | PF側では明示的にクラスを取得し、提出コード側では `exec`, `eval`, `getattr`, `setattr` などをAST検査で禁止する |
+| `agent1.output_hand()` の後に `agent2.output_hand()` を呼ぶ | 後手側が呼び出し元フレームを覗けると、先手の手を読める可能性がある | 両者へ先に `output_hand` 要求を送り、両方の応答が揃ってから勝敗判定する |
+| 外側ループで生成した `agent1` を複数の相手戦で再利用 | 先に戦った相手の履歴が次の相手との対戦に持ち越され、対戦順序によるバイアスが出る | 各グループ対戦ごとに両チームのエージェントを新規生成する |
+| `get_hand` を2体まとめて `try: ... except: pass` で処理 | どちらのエージェントが失敗したか分からず、失敗理由も記録されない | 各エージェントの `status`, `reason`, `timeouts`, `invalid_moves` などを詳細ログに残す |
+| 提出コードのimportや組み込み関数利用を事前検査しない | `sys`, `os`, `inspect`, `importlib`, `globals`, `locals`, `__import__` などでPF内部や環境へ触れる抜け道がある | AST検査で許可importを `numpy`, `math`, `random`, `time`, `timeout_decorator` に限定し、危険なimport・関数・dunderアクセスを禁止する |
+| タイムアウトを提出側の `timeout_decorator` に依存 | デコレータの削除・無効化・想定外の停止にPF側だけでは対応しにくい | ルール検査でデコレータを確認しつつ、PF側でも `__init__`, `output_hand`, `get_hand` にタイムアウトをかける |
+
 ## バグ・異常時の扱い
 
 - `__init__`, `output_hand`, `get_hand` の例外やタイムアウトは、そのエージェントのバグとして扱います。
